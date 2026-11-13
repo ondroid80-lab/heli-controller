@@ -27,14 +27,7 @@ jobs:
       - name: Závislosti a test mapování
         timeout-minutes: 8
         run: |
-          python -m pip install --progress-bar off --timeout 60 --retries 3 pystray Pillow pyinstaller
-          # vgamepad jen z předkompilovaného wheel (sdist se na runneru zasekává)
-          $ok = $false
-          foreach ($v in @("0.2.0", "0.1.1", "0.1.0", "0.0.16")) {
-            pip install "vgamepad==$v" --only-binary=:all: --progress-bar off --timeout 60 --retries 2
-            if ($LASTEXITCODE -eq 0) { Write-Host "vgamepad ${v}: wheel OK"; $ok = $true; break }
-          }
-          if (-not $ok) { throw "Pro vgamepad není na Windows dostupný předkompilovaný balíček." }
+          python -m pip install --progress-bar off --timeout 60 --retries 3 -r requirements.txt
           python test_receiver.py
 
       - name: Sestavit HeliController.exe
@@ -42,15 +35,14 @@ jobs:
           pyinstaller --noconfirm --onedir --noconsole --name HeliController --add-data "config.json;." tray_app.py
           Copy-Item config.json dist\HeliController\config.json
 
-      - name: Stáhnout ovladač ViGEmBus (oficiální release)
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Stáhnout instalátor vJoy (winget, pevná verze)
         run: |
           New-Item -ItemType Directory -Force vendor | Out-Null
-          $asset = gh release view --repo nefarius/ViGEmBus --json assets --jq '.assets[].name' | Where-Object { $_ -match '\.exe$' -and $_ -match 'ViGEm' } | Select-Object -First 1
-          Write-Host "ViGEmBus asset: $asset"
-          gh release download --repo nefarius/ViGEmBus --pattern $asset --dir vendor --clobber
-          Move-Item -Force (Join-Path vendor $asset) vendor\ViGEmBus_Setup.exe
+          winget download --id ShaulEizikovich.vJoyDeviceDriver --version 2.1.9.1 --download-directory vendor --accept-package-agreements --accept-source-agreements
+          $exe = Get-ChildItem vendor -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw "vJoy installer nebyl stažen." }
+          Move-Item -Force $exe.FullName vendor\vJoySetup.exe
+          Get-FileHash vendor\vJoySetup.exe -Algorithm SHA256 | Format-List
 
       - name: Nainstalovat Inno Setup
         run: choco install innosetup -y --no-progress

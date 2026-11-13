@@ -2,7 +2,7 @@
 import json
 import math
 
-from receiver import Mapper, apply_deadzone, load_config, parse_packet, clamp
+from receiver import Mapper, apply_deadzone, load_config, parse_packet, clamp, to_vjoy_axis
 
 
 def test_deadzone():
@@ -38,6 +38,19 @@ def test_collective_split_to_triggers():
     down = m.map({"collective": -0.7})
     assert up.rt > 0 and up.lt == 0
     assert down.lt > 0 and down.rt == 0
+
+
+def test_vjoy_axis_range():
+    assert to_vjoy_axis(-1.0) == 0
+    assert to_vjoy_axis(1.0) == 32767
+    assert abs(to_vjoy_axis(0.0) - 16384) <= 1
+    assert to_vjoy_axis(5.0) == 32767  # ořez mimo rozsah
+
+
+def test_button_numbers_from_config():
+    m = Mapper(load_config())
+    axes = m.map({"buttons": 0b11})  # bity 0 a 1 -> tlačítka vJoy 1 a 2
+    assert m.button_numbers(axes) == [1, 2]
 
 
 def test_buttons_bitmask():

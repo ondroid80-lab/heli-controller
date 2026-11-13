@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Jádro přijímače: přijímá UDP pakety z telefonu a převádí je na virtuální Xbox 360 ovladač
-(ViGEmBus + vgamepad). Hra ho vidí jako běžný gamepad.
+(vJoy). Hra ho vidí jako běžný joystick.
 
 Protokol (UDP, port z config.json, výchozí 47800):
   telefon -> PC  JSON jednou za ~20 ms:
@@ -10,7 +10,7 @@ Protokol (UDP, port z config.json, výchozí 47800):
   PC -> telefon  JSON {"heli": 1, "name": "<jméno PC>", "port": <port>}   (odpověď na objevení)
 
 Spuštění z příkazové řádky (bez okna):
-  python receiver.py                # reálný virtuální ovladač (Windows + ViGEmBus)
+  python receiver.py                # reálný virtuální joystick (Windows + vJoy)
   python receiver.py --dry-run      # jen vypisuje hodnoty, bez ovladače
 Okno s ikonou v liště: tray_app.py
 """
@@ -65,7 +65,8 @@ class Mapper:
         self.dz = float(cfg.get("deadzone", 0.05))
         self.inv = cfg.get("invert", {})
         self.sens = cfg.get("sensitivity", {})
-        self.button_map = {int(k): v for k, v in cfg.get("buttons", {}).items()}
+        # index bitu telefonu -> číslo tlačítka vJoy (1..32)
+        self.button_map = {int(k): int(v) for k, v in cfg.get("buttons", {}).items()}
 
     def _axis(self, name: str, raw: float) -> float:
         v = clamp(raw)
@@ -92,7 +93,7 @@ class Mapper:
         axes.buttons = [i for i in range(32) if mask & (1 << i) and i in self.button_map]
         return axes
 
-    def button_names(self, axes: Axes) -> list[str]:
+    def button_numbers(self, axes: Axes) -> list[int]:
         return [self.button_map[i] for i in axes.buttons]
 
 
@@ -123,20 +124,33 @@ def local_ip() -> str:
 # Výstupní zařízení
 # ---------------------------------------------------------------------------
 
+def to_vjoy_axis(v: float) -> int:
+    """-1..1 -> 0..32767 (střed 16384), jak očekává vJoy."""
+    v = clamp(v)
+    return max(0, min(VJOY_AXIS_MAX, round((v + 1.0) / 2.0 * VJOY_AXIS_MAX)))
+
+
+VJOY_AXIS_MAX = 32767
+VJOY_DEVICE = 1
+VJOY_DLL_DEFAULT = Path(r"C:\Program Files\vJoy\x64\vJoyInterface.dll")
+# HID kódy os (usage) podle vJoy SDK
+HID_X, HID_Y, HID_Z, HID_RZ = 0x30, 0x31, 0x32, 0x35
+
+
 class DryRunPad:
-    """Náhrada za vgamepad pro testování bez Windows/ViGEmBus."""
+    """Náhrada za vJoy pro testování bez Windows/vJoy."""
 
     def __init__(self, log: Callable[[str], None] = print):
         self.log = log
         self.last = 0.0
 
-    def apply(self, axes: Axes, names: list[str]):
+    def apply(self, axes: Axes, numbers: list[int]):
         now = time.monotonic()
         if now - self.last < 0.2:
             return
         self.last = now
-        self.log(f"LX={axes.lx:+.2f} LY={axes.ly:+.2f} RX={axes.rx:+.2f} "
-                 f"LT={axes.lt:.2f} RT={axes.rt:.2f} btn={names}")
+        self.log(f"X={axes.lx:+.2f} Y={axes.ly:+.2f} Z={axes.rt - axes.lt:+.2f} "
+                 f"RZ={axes.rx:+.2f} btn={numbers}")
 
     def reset(self):
         pass
@@ -145,53 +159,69 @@ class DryRunPad:
         pass
 
 
-class VirtualPad:
-    """Virtuální Xbox 360 ovladač přes vgamepad (vyžaduje ViGEmBus na Windows)."""
+class VJoyPad:
+    """Virtuální joystick přes vJoyInterface.dll (vyžaduje nainstalovaný vJoy na Windows)."""
 
-    def __init__(self):
-        import vgamepad as vg  # importujeme až tady, aby šel modul načíst i bez něj
+    def __init__(self, dll_path: Path = VJOY_DLL_DEFAULT):
+        import ctypes
 
-        self.vg = vg
-        self.pad = vg.VX360Gamepad()
-        self._pressed: set[str] = set()
+        if not dll_path.exists():
+            raise RuntimeError("Není nainstalovaný vJoy (chybí vJoyInterface.dll).")
+        self.dll = ctypes.WinDLL(str(dll_path))
+        d = self.dll
+        d.vJoyEnabled.restype = ctypes.c_int
+        d.AcquireVJD.argtypes = [ctypes.c_uint]
+        d.AcquireVJD.restype = ctypes.c_int
+        d.RelinquishVJD.argtypes = [ctypes.c_uint]
+        d.RelinquishVJD.restype = ctypes.c_int
+        d.ResetVJD.argtypes = [ctypes.c_uint]
+        d.ResetVJD.restype = ctypes.c_int
+        d.SetAxis.argtypes = [ctypes.c_long, ctypes.c_uint, ctypes.c_uint]
+        d.SetAxis.restype = ctypes.c_int
+        d.SetBtn.argtypes = [ctypes.c_int, ctypes.c_uint, ctypes.c_ubyte]
+        d.SetBtn.restype = ctypes.c_int
 
-    def apply(self, axes: Axes, names: list[str]):
-        self.pad.left_joystick_float(x_value_float=axes.lx, y_value_float=axes.ly)
-        self.pad.right_joystick_float(x_value_float=axes.rx, y_value_float=0.0)
-        self.pad.left_trigger_float(value_float=axes.lt)
-        self.pad.right_trigger_float(value_float=axes.rt)
+        if not d.vJoyEnabled():
+            raise RuntimeError("vJoy je nainstalovaný, ale není aktivní. Zkus přeinstalovat vJoy.")
+        if not d.AcquireVJD(VJOY_DEVICE):
+            raise RuntimeError(f"Virtuální joystick {VJOY_DEVICE} je obsazený nebo neexistuje (zkontroluj vJoy Config).")
+        d.ResetVJD(VJOY_DEVICE)
+        self._pressed: set[int] = set()
 
-        wanted = set(names)
-        for name in wanted - self._pressed:
-            self.pad.press_button(button=getattr(self.vg.XUSB_BUTTON, name))
-        for name in self._pressed - wanted:
-            self.pad.release_button(button=getattr(self.vg.XUSB_BUTTON, name))
+    def apply(self, axes: Axes, numbers: list[int]):
+        d = self.dll
+        d.SetAxis(to_vjoy_axis(axes.lx), VJOY_DEVICE, HID_X)
+        d.SetAxis(to_vjoy_axis(axes.ly), VJOY_DEVICE, HID_Y)
+        d.SetAxis(to_vjoy_axis(axes.rt - axes.lt), VJOY_DEVICE, HID_Z)
+        d.SetAxis(to_vjoy_axis(axes.rx), VJOY_DEVICE, HID_RZ)
+
+        wanted = set(numbers)
+        for n in wanted - self._pressed:
+            d.SetBtn(1, VJOY_DEVICE, n)
+        for n in self._pressed - wanted:
+            d.SetBtn(0, VJOY_DEVICE, n)
         self._pressed = wanted
-        self.pad.update()
 
     def reset(self):
         """Bezpečnost: při ztrátě spojení vše vrátit do středu."""
-        self.apply(Axes(), [])
+        self.dll.ResetVJD(VJOY_DEVICE)
+        self._pressed = set()
 
     def close(self):
         self.reset()
-        self.pad.reset()
-        self.pad.update()
+        self.dll.RelinquishVJD(VJOY_DEVICE)
 
 
 def create_pad(dry_run: bool, log: Callable[[str], None] = print):
-    """Vytvoří výstup. Při chybě (chybí ViGEmBus apod.) vyhodí RuntimeError s lidským textem."""
+    """Vytvoří výstup. Při chybě (chybí vJoy apod.) vyhodí RuntimeError s lidským textem."""
     if dry_run:
         return DryRunPad(log)
     try:
-        return VirtualPad()
-    except ImportError as e:
-        raise RuntimeError("Chybí knihovna vgamepad (pip install vgamepad).") from e
+        return VJoyPad()
+    except RuntimeError:
+        raise
     except Exception as e:
-        raise RuntimeError(
-            "Virtuální ovladač nelze vytvořit. Je nainstalovaný ViGEmBus? "
-            f"({e})"
-        ) from e
+        raise RuntimeError(f"Virtuální joystick nelze vytvořit ({e}). Je nainstalovaný vJoy?") from e
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +327,7 @@ class Bridge:
             last_packet = time.monotonic()
 
             axes = self.mapper.map(pkt)
-            self._pad.apply(axes, self.mapper.button_names(axes))
+            self._pad.apply(axes, self.mapper.button_numbers(axes))
 
         self._pad.reset()
 

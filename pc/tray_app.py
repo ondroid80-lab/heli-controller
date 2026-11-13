@@ -3,7 +3,7 @@
 Heli Controller – okno a ikona v liště (Windows).
 
 Uživatel: spustí aplikaci, zkontroluje se, že je vše připravené, a stiskne Start.
-Vše ostatní (firewall, ViGEmBus, spuštění s Windows) jde nastavit tlačítky v okně.
+Vše ostatní (firewall, vJoy, spuštění s Windows) jde nastavit tlačítky v okně.
 """
 
 from __future__ import annotations
@@ -45,9 +45,12 @@ def run_hidden(args: list[str]) -> subprocess.CompletedProcess:
 # Kontroly systému
 # ---------------------------------------------------------------------------
 
-def vigem_installed() -> bool:
-    """ViGEmBus je služba; `sc query` vrátí 0, pokud existuje."""
-    return run_hidden(["sc", "query", "ViGEmBus"]).returncode == 0
+VJOY_DLL = Path(r"C:\Program Files\vJoy\x64\vJoyInterface.dll")
+
+
+def vjoy_installed() -> bool:
+    """vJoy zanechá DLL v Program Files; instalátor ji nainstaluje společně s ovladačem."""
+    return VJOY_DLL.exists()
 
 
 def firewall_rule_exists() -> bool:
@@ -152,10 +155,10 @@ class App:
         checks = ttk.LabelFrame(frm, text="Připravenost")
         checks.pack(fill="x", padx=14, pady=8)
 
-        self.vigem_var = tk.StringVar()
+        self.vjoy_var = tk.StringVar()
         self.fw_var = tk.StringVar()
-        ttk.Label(checks, textvariable=self.vigem_var).grid(row=0, column=0, sticky="w", padx=8, pady=4)
-        ttk.Button(checks, text="Nainstalovat ovladač", command=self.open_vigem).grid(row=0, column=1, padx=8)
+        ttk.Label(checks, textvariable=self.vjoy_var).grid(row=0, column=0, sticky="w", padx=8, pady=4)
+        ttk.Button(checks, text="Nainstalovat vJoy", command=self.open_vjoy).grid(row=0, column=1, padx=8)
         ttk.Label(checks, textvariable=self.fw_var).grid(row=1, column=0, sticky="w", padx=8, pady=4)
         ttk.Button(checks, text="Opravit firewall", command=self.fix_firewall).grid(row=1, column=1, padx=8)
 
@@ -171,8 +174,8 @@ class App:
         self.log_text.pack(fill="both", expand=True, padx=14, pady=(4, 8))
 
     def _refresh_checks(self):
-        self.vigem_var.set("✔ ViGEmBus je nainstalovaný" if vigem_installed()
-                           else "✖ Chybí ovladač ViGEmBus")
+        self.vjoy_var.set("✔ vJoy je nainstalovaný" if vjoy_installed()
+                          else "✖ Chybí virtuální joystick vJoy")
         self.fw_var.set("✔ Firewall je nastavený" if firewall_rule_exists()
                         else "✖ Firewall blokuje telefon")
 
@@ -202,9 +205,9 @@ class App:
         else:
             messagebox.showwarning("Heli Controller", "Firewall se nepodařilo nastavit.")
 
-    def open_vigem(self):
+    def open_vjoy(self):
         import webbrowser
-        webbrowser.open("https://github.com/nefarius/ViGEmBus/releases")
+        webbrowser.open("https://sourceforge.net/projects/vjoystick/")
 
     def open_joy_cpl(self):
         subprocess.Popen(["control", "joy.cpl"], creationflags=NO_WINDOW)

@@ -4,7 +4,7 @@ Telefon držený naplocho se naklání a otáčí. Data jdou po Wi-Fi na PC, kde
 mění na virtuální Xbox ovladač. Hra (Arma 3, Wardogs) ho vidí jako běžný gamepad.
 
 ```
-[Android appka] --UDP JSON 50x/s--> [receiver.py na PC] --ViGEm--> [virtuální Xbox pad] --> [hra]
+[Android appka] --UDP JSON 50x/s--> [receiver.py na PC] --vJoy--> [virtuální joystick] --> [hra]
 ```
 
 ## Mapování
@@ -26,7 +26,7 @@ uživatel v nastavení ovládání hry.
 
 ### Instalace
 1. Nainstaluj **Python 3.12+** (zaškrtni „Add python.exe to PATH“).
-2. Nainstaluj ovladač **ViGEmBus** z https://github.com/nefarius/ViGEmBus/releases (soubor `ViGEmBus_Setup_x.x.x.exe`). Po instalaci je nutný restart.
+2. Nainstaluj **vJoy** z https://sourceforge.net/projects/vjoystick/ (výchozí nastavení). Virtuální joystick 1 je nastaven automaticky.
 3. Ve složce `pc/` spusť:
    ```
    python -m pip install -r requirements.txt
@@ -58,7 +58,7 @@ Pokud hra běží přes Steam, vypni pro ni Steam Input (Vlastnosti hry → Ovla
 ```
 build_exe.bat
 ```
-Výsledek je v `dist\receiver\receiver.exe`. ViGEmBus musí být nainstalovaný i u exe.
+Výsledek je v `dist\receiver\receiver.exe`. vJoy musí být nainstalovaný i u exe.
 
 ---
 

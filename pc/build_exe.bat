@@ -9,5 +9,5 @@ python -m PyInstaller --noconfirm --onedir --noconsole --name HeliController ^
 copy /Y config.json dist\HeliController\config.json >nul
 echo.
 echo Hotovo: dist\HeliController\HeliController.exe
-echo Instalator: otevri installer.iss v Inno Setup (vyzaduje vendor\ViGEmBus_Setup.exe).
+echo Instalator: otevri installer.iss v Inno Setup (vyzaduje vendor\vJoySetup.exe).
 pause

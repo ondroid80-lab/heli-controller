@@ -1,6 +1,6 @@
 ; Heli Controller – instalátor pro Windows (Inno Setup 6+)
 ; Sestavení: otevři v Inno Setup Compileru nebo: iscc installer.iss
-; Předpoklad: build_exe.bat vytvořil složku dist\HeliController\ a vendor\ViGEmBus_Setup.exe existuje.
+; Předpoklad: build_exe.bat vytvořil složku dist\HeliController\ a vendor\vJoySetup.exe existuje.
 
 #define MyAppName "Heli Controller"
 #define MyAppVersion "0.2.0"
@@ -21,7 +21,7 @@ OutputBaseFilename=HeliController-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-; Potřebujeme práva správce: ViGEmBus (ovladač), pravidlo firewallu.
+; Potřebujeme práva správce: vJoy (ovladač), pravidlo firewallu.
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExe}
@@ -35,8 +35,8 @@ Name: "desktopicon"; Description: "Ikona na ploše"; GroupDescription: "Nastaven
 
 [Files]
 Source: "dist\HeliController\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Instalátor ovladače ViGEmBus (bundle, licence MIT). Stáhni z https://github.com/nefarius/ViGEmBus/releases
-Source: "vendor\ViGEmBus_Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: not VigemInstalled
+; Instalátor vJoy (virtuální joystick, veřejná doména). Zdroj: https://sourceforge.net/projects/vjoystick/
+Source: "vendor\vJoySetup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: not VJoyInstalled
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"
@@ -50,16 +50,16 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [Run]
 ; Firewall: povolit UDP port pro privátní síť (telefon v domácí Wi-Fi)
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""{#FwRule}"" dir=in action=allow protocol=UDP localport={#Port} profile=private"; Flags: runhidden waituntilterminated
-; ViGEmBus: tichá instalace (ověř přepínač /qn u konkrétní verze ViGEmBus)
-Filename: "{tmp}\ViGEmBus_Setup.exe"; Parameters: "/qn /norestart"; StatusMsg: "Instaluji ovladač ViGEmBus..."; Flags: waituntilterminated; Check: not VigemInstalled
+; vJoy: tichá instalace (Inno Setup přepínač)
+Filename: "{tmp}\vJoySetup.exe"; Parameters: "/VERYSILENT /NORESTART"; StatusMsg: "Instaluji virtuální joystick vJoy..."; Flags: waituntilterminated; Check: not VJoyInstalled
 Filename: "{app}\{#MyAppExe}"; Description: "Spustit {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""{#FwRule}"""; Flags: runhidden waituntilterminated; RunOnceId: "DelFwRule"
 
 [Code]
-function VigemInstalled: Boolean;
+function VJoyInstalled: Boolean;
 begin
-  // ViGEmBus registruje službu; pokud existuje, instalátor ji znovu nedává.
-  Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\ViGEmBus');
+  // vJoy zanechá DLL v Program Files; pokud existuje, instalátor vJoy znovu nedává.
+  Result := FileExists(ExpandConstant('{commonpf64}\vJoy\x64\vJoyInterface.dll'));
 end;
