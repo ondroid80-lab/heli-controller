@@ -1,0 +1,11 @@
+# Build a lokální soubory
+**/build/
+**/.gradle/
+android/.idea/
+android/local.properties
+pc/dist/
+pc/build/
+pc/__pycache__/
+pc/vendor/
+*.spec
+__pycache__/

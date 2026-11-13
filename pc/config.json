@@ -1,0 +1,27 @@
+{
+  "port": 47800,
+  "deadzone": 0.05,
+  "timeout_s": 0.5,
+  "invert": {
+    "pitch": false,
+    "roll": false,
+    "yaw": false,
+    "collective": false
+  },
+  "sensitivity": {
+    "pitch": 1.0,
+    "roll": 1.0,
+    "yaw": 1.0,
+    "collective": 1.0
+  },
+  "buttons": {
+    "0": "XUSB_GAMEPAD_A",
+    "1": "XUSB_GAMEPAD_B",
+    "2": "XUSB_GAMEPAD_X",
+    "3": "XUSB_GAMEPAD_Y",
+    "4": "XUSB_GAMEPAD_LEFT_SHOULDER",
+    "5": "XUSB_GAMEPAD_RIGHT_SHOULDER",
+    "6": "XUSB_GAMEPAD_START",
+    "7": "XUSB_GAMEPAD_BACK"
+  }
+}
