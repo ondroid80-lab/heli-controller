@@ -224,6 +224,50 @@ def create_pad(dry_run: bool, log: Callable[[str], None] = print):
         raise RuntimeError(f"Virtuální joystick nelze vytvořit ({e}). Je nainstalovaný vJoy?") from e
 
 
+def vjoy_selftest(log: Callable[[str], None]) -> bool:
+    """
+    Diagnostika vJoy: ověří DLL, získá zařízení 1 a 5 s pohybuje osou X.
+    Výsledky hlásí přes log(). Vrací True, pokud volání prošla.
+    """
+    import ctypes
+    import math
+
+    log("Diagnostika vJoy: začínám.")
+    if not VJOY_DLL_DEFAULT.exists():
+        log("✖ Nenalezen vJoyInterface.dll. Je nainstalovaný vJoy?")
+        return False
+    try:
+        pad = VJoyPad()
+    except RuntimeError as e:
+        log(f"✖ {e}")
+        return False
+
+    try:
+        d = pad.dll
+        d.GetVJDStatus.argtypes = [ctypes.c_uint]
+        d.GetVJDStatus.restype = ctypes.c_int
+        status = {0: "vlastním", 1: "volné", 2: "obsazené", 3: "chybí", 4: "neznámé"}
+        code = d.GetVJDStatus(VJOY_DEVICE)
+        log(f"Stav zařízení {VJOY_DEVICE}: {status.get(code, code)}")
+        log("✔ Zařízení vJoy 1 získáno.")
+
+        failures = 0
+        for i in range(100):  # ~5 s
+            v = int(16384 + 16000 * math.sin(i / 10))
+            ok = d.SetAxis(v, VJOY_DEVICE, HID_X)
+            if not ok:
+                failures += 1
+            time.sleep(0.05)
+        if failures == 0:
+            log("✔ Osa X přijímala hodnoty (5 s). Pokud se v joy.cpl nehýbe, je vJoy špatně nakonfigurovaný (osy X, Y, Z, Rz v vJoy Configure).")
+            return True
+        log(f"✖ SetAxis selhalo {failures}×. Zapni osy X, Y, Z, Rz ve vJoy Configure a zkus to znovu.")
+        return False
+    finally:
+        pad.close()
+        log("Diagnostika vJoy: hotovo.")
+
+
 # ---------------------------------------------------------------------------
 # Bridge: přenos telefon -> ovladač, běží ve vlastním vlákně
 # ---------------------------------------------------------------------------

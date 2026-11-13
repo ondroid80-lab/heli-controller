@@ -169,6 +169,7 @@ class App:
         ).pack(padx=14, anchor="w", pady=4)
 
         ttk.Button(frm, text="Otestovat ovladač (Windows)", command=self.open_joy_cpl).pack(**pad, fill="x")
+        ttk.Button(frm, text="Diagnostika vJoy (5 s pohyb osy X)", command=self.run_selftest).pack(**pad, fill="x")
 
         self.log_text = tk.Text(frm, height=6, font=("Consolas", 9), state="disabled")
         self.log_text.pack(fill="both", expand=True, padx=14, pady=(4, 8))
@@ -209,6 +210,17 @@ class App:
         import webbrowser
         webbrowser.open("https://sourceforge.net/projects/vjoystick/")
 
+    def run_selftest(self):
+        if self.bridge.running:
+            messagebox.showinfo("Heli Controller", "Nejdřív zastav přijímač (tlačítko Zastavit), pak spusť diagnostiku.")
+            return
+        self._append_log("— Diagnostika vJoy —")
+
+        def worker():
+            receiver.vjoy_selftest(lambda msg: self.ui_queue.put(("log", msg)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def open_joy_cpl(self):
         subprocess.Popen(["control", "joy.cpl"], creationflags=NO_WINDOW)
 
@@ -244,6 +256,9 @@ class App:
                     return
                 if state == "toggle":
                     self.toggle()
+                    continue
+                if state == "log":
+                    self._append_log(text)
                     continue
                 self._apply_status(state, text)
         except queue.Empty:
