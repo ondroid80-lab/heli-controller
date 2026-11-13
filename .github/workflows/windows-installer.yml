@@ -1,0 +1,64 @@
+name: Build Windows installer
+
+on:
+  push:
+    branches: [main]
+    paths: ["pc/**", ".github/workflows/windows-installer.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: pc
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Závislosti a test mapování
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python test_receiver.py
+
+      - name: Sestavit HeliController.exe
+        run: |
+          pyinstaller --noconfirm --onedir --noconsole --name HeliController --add-data "config.json;." tray_app.py
+          Copy-Item config.json dist\HeliController\config.json
+
+      - name: Stáhnout ovladač ViGEmBus (oficiální release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force vendor | Out-Null
+          $asset = gh release view --repo nefarius/ViGEmBus --json assets --jq '.assets[].name' | Where-Object { $_ -match '\.exe$' -and $_ -match 'ViGEm' } | Select-Object -First 1
+          Write-Host "ViGEmBus asset: $asset"
+          gh release download --repo nefarius/ViGEmBus --pattern $asset --dir vendor --clobber
+          Move-Item -Force (Join-Path vendor $asset) vendor\ViGEmBus_Setup.exe
+
+      - name: Nainstalovat Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Sestavit instalátor
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+          Get-ChildItem output
+
+      - name: Zveřejnit instalátor v Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-installer
+          name: Heli Controller – instalátor pro Windows (nejnovější)
+          make_latest: false
+          files: pc/output/HeliController-Setup.exe
+          body: |
+            Nejnovější instalátor z větve main (commit ${{ github.sha }}).
+            Přímý odkaz: https://github.com/${{ github.repository }}/releases/download/latest-installer/HeliController-Setup.exe
