@@ -32,7 +32,7 @@ jobs:
           $ok = $false
           foreach ($v in @("0.2.0", "0.1.1", "0.1.0", "0.0.16")) {
             pip install "vgamepad==$v" --only-binary=:all: --progress-bar off --timeout 60 --retries 2
-            if ($LASTEXITCODE -eq 0) { Write-Host "vgamepad $v: wheel OK"; $ok = $true; break }
+            if ($LASTEXITCODE -eq 0) { Write-Host "vgamepad ${v}: wheel OK"; $ok = $true; break }
           }
           if (-not $ok) { throw "Pro vgamepad není na Windows dostupný předkompilovaný balíček." }
           python test_receiver.py
