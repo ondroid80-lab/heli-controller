@@ -134,6 +134,7 @@ class App:
         self._build_ui()
         self._refresh_checks()
         self.root.after(100, self._poll)
+        self.root.after(200, self._update_live)
 
     # ----- UI -----
 
@@ -170,6 +171,9 @@ class App:
 
         ttk.Button(frm, text="Otestovat ovladač (Windows)", command=self.open_joy_cpl).pack(**pad, fill="x")
         ttk.Button(frm, text="Diagnostika vJoy (5 s pohyb osy X)", command=self.run_selftest).pack(**pad, fill="x")
+
+        self.live_var = tk.StringVar(value="Zatím žádná data z telefonu")
+        ttk.Label(frm, textvariable=self.live_var, font=("Consolas", 8)).pack(padx=14, anchor="w")
 
         self.log_text = tk.Text(frm, height=6, font=("Consolas", 9), state="disabled")
         self.log_text.pack(fill="both", expand=True, padx=14, pady=(4, 8))
@@ -246,6 +250,10 @@ class App:
         self.ui_queue.put(("quit", ""))
 
     # ----- smyčka -----
+
+    def _update_live(self):
+        self.live_var.set(self.bridge.last_text)
+        self.root.after(200, self._update_live)
 
     def _poll(self):
         try:

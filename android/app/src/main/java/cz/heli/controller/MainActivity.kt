@@ -4,6 +4,8 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -35,6 +37,16 @@ class MainActivity : Activity() {
     private lateinit var profileSpinner: Spinner
     private lateinit var buttonArea: LinearLayout
     private lateinit var collectiveBar: SeekBar
+    private lateinit var liveView: TextView
+    private val handler = Handler(Looper.getMainLooper())
+    private val liveTick = object : Runnable {
+        override fun run() {
+            liveView.text = "Senzory: pitch=%+.2f roll=%+.2f yaw=%+.2f | kolektiv=%+.2f | tlačítka=%d".format(
+                sensors.pitch, sensors.roll, sensors.yaw, collective, buttonMask
+            )
+            handler.postDelayed(this, 200)
+        }
+    }
 
     private val prefs by lazy { getSharedPreferences("heli_prefs", Context.MODE_PRIVATE) }
 
@@ -68,10 +80,12 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         sensors.start()
+        handler.post(liveTick)
     }
 
     override fun onPause() {
         super.onPause()
+        handler.removeCallbacks(liveTick)
         sensors.stop()
         sender.stop()
         buttonMask = 0
@@ -134,6 +148,13 @@ class MainActivity : Activity() {
             setPadding(0, 8, 0, 8)
         }
         root.addView(statusView)
+
+        liveView = TextView(this).apply {
+            text = "Senzory: čekám na data…"
+            textSize = 12f
+            typeface = android.graphics.Typeface.MONOSPACE
+        }
+        root.addView(liveView)
 
         // Hlavní oblast: tlačítka vlevo, kolektiv dole
         buttonArea = LinearLayout(this).apply {

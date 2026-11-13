@@ -301,6 +301,9 @@ class Bridge:
         self._thread: threading.Thread | None = None
         self._sock: socket.socket | None = None
         self._pad = None
+        # poslední přijatá data pro živý výpis v okně (text, aktualizuje se z vlákna přijímače)
+        self.last_text = "Zatím žádná data z telefonu"
+        self.packets_total = 0
 
     @property
     def running(self) -> bool:
@@ -372,6 +375,10 @@ class Bridge:
 
             axes = self.mapper.map(pkt)
             self._pad.apply(axes, self.mapper.button_numbers(axes))
+            self.packets_total += 1
+            self.last_text = (f"pitch={pkt.get('pitch', 0):+.2f}  roll={pkt.get('roll', 0):+.2f}  "
+                              f"yaw={pkt.get('yaw', 0):+.2f}  kolektiv={pkt.get('collective', 0):+.2f}  "
+                              f"tlačítka={pkt.get('buttons', 0)}  (paketů: {self.packets_total})")
 
         self._pad.reset()
 
