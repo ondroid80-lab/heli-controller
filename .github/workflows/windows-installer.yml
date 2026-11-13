@@ -27,8 +27,14 @@ jobs:
       - name: Závislosti a test mapování
         timeout-minutes: 8
         run: |
-          python -m pip install --progress-bar off "setuptools<75" wheel
-          pip install -r requirements.txt --progress-bar off --timeout 60 --retries 3 --no-build-isolation
+          python -m pip install --progress-bar off --timeout 60 --retries 3 pystray Pillow pyinstaller
+          # vgamepad jen z předkompilovaného wheel (sdist se na runneru zasekává)
+          $ok = $false
+          foreach ($v in @("0.2.0", "0.1.1", "0.1.0", "0.0.16")) {
+            pip install "vgamepad==$v" --only-binary=:all: --progress-bar off --timeout 60 --retries 2
+            if ($LASTEXITCODE -eq 0) { Write-Host "vgamepad $v: wheel OK"; $ok = $true; break }
+          }
+          if (-not $ok) { throw "Pro vgamepad není na Windows dostupný předkompilovaný balíček." }
           python test_receiver.py
 
       - name: Sestavit HeliController.exe
